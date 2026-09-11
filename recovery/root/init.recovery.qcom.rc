@@ -28,14 +28,72 @@
 import /init.recovery.wifi.rc
 
 on early-init
+    # Use Qualcomm's Mapper5/SnapAlloc path for buffers shared by EGL and KMS.
+    setprop vendor.gralloc.enable_snapalloc true
     start vendor.gatekeeper_default
     mount none /vendor/odm /odm bind
+
+service aera-graphics-allocator /vendor/bin/hw/vendor.qti.hardware.display.allocator-service
+    class hal
+    seclabel u:r:recovery:s0
+    user root
+    group root graphics
+    capabilities SYS_NICE
 
 service post-boot-script /system/bin/sh -c /vendor/bin/init.kernel.post_boot-canoe_default_6_2.sh
     user root
     group root
     oneshot
     seclabel u:r:recovery:s0
+
+# The installed OP15 partitions provide the ABI-matched Qualcomm audio
+# libraries and DSP payload. The small device-local launchers remain disabled
+# until AERA has mounted those partitions read-only after decryption.
+service aera-pd-mapper /vendor/bin/aera-pd-mapper
+    class core
+    disabled
+    seclabel u:r:recovery:s0
+    user system
+    group system
+    setenv LD_LIBRARY_PATH /vendor/aera-audio-abi:/vendor/aera-stock-lib64:/vendor/lib64:/system/lib64
+
+service aera-dspservice /vendor/bin/aera-dspservice
+    class hal
+    disabled
+    seclabel u:r:recovery:s0
+    user system
+    group system wakelock oem_2908
+    capabilities BLOCK_SUSPEND
+    setenv LD_LIBRARY_PATH /vendor/aera-audio-abi:/vendor/aera-stock-lib64:/vendor/lib64:/system/lib64
+    interface aidl vendor.qti.hardware.dsp.IDspService/default
+
+service aera-audioadsprpcd /vendor/bin/aera-audioadsprpcd audiopd adsp
+    class main
+    disabled
+    seclabel u:r:recovery:s0
+    user media
+    group media
+    setenv LD_LIBRARY_PATH /vendor/aera-audio-abi:/vendor/aera-stock-lib64:/vendor/lib64:/system/lib64
+
+service aera-agm-service /system/bin/aera-audio-service --infiniti-stock-agm
+    class main
+    disabled
+    seclabel u:r:recovery:s0
+    user root
+    group root system audio media wakelock
+    setenv LD_LIBRARY_PATH /vendor/aera-audio-abi:/vendor/aera-stock-lib64:/vendor/lib64:/system/lib64
+    setenv ANDROID_ROOT /system
+    setenv ANDROID_DATA /data
+    interface aidl vendor.qti.hardware.agm.IAGM/default
+    interface aidl vendor.qti.hardware.pal.IPAL/default
+
+service aera-audio-bootstrap /system/bin/aera-audio-bootstrap
+    class core
+    disabled
+    oneshot
+    seclabel u:r:recovery:s0
+    user root
+    group root system audio media wakelock
 
 service fox-thermal-guard /system/bin/fox_thermal_guard
     class core
@@ -102,6 +160,10 @@ on property:twrp.modules.loaded=true
     wait /sys/class/power_supply/battery
     start vendor.health-default
     umount /firmware
+
+# Keep stock audio partition mounts away from the FBE critical path.
+on property:post.decrypt.modules=true
+    start aera-audio-bootstrap
 
 on property:ro.crypto.state=encrypted && property:ro.boot.dynamic_partitions=true
     start prepdecrypt.vendor

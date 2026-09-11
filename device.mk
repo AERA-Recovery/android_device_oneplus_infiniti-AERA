@@ -19,10 +19,20 @@ PRODUCT_TARGET_VNDK_VERSION := 34
 PRODUCT_USE_DYNAMIC_PARTITIONS := true
 
 PRODUCT_PACKAGES += \
+    aera-audio-bridge \
+    aera-audio-service \
+    aera-browser-jail \
+    aera-gpu-probe \
     lpflash \
     lpmake \
     lpunpack \
     fox_thermal_guard
+
+# Infiniti/OnePlus 15 Adreno 840 backend. The ABI-matched KGSL module,
+# gen80200 firmware, EGL/GLES userspace, and mapper closure remain local to
+# this SM8850 device tree; generic AERA keeps its software fallback.
+PRODUCT_VENDOR_PROPERTIES += \
+    ro.hardware.egl=adreno
 
 # OTA certs
 PRODUCT_EXTRA_RECOVERY_KEYS += \
@@ -32,6 +42,6 @@ PRODUCT_EXTRA_RECOVERY_KEYS += \
 # Soong namespaces
 PRODUCT_SOONG_NAMESPACES += $(LOCAL_PATH)
 
-# some OrangeFox-specific settings
+# Recovery-specific settings
 $(call inherit-product, $(LOCAL_PATH)/fox_infiniti.mk)
 #

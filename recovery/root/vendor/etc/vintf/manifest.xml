@@ -1,11 +1,15 @@
 <!--
     Input:
-        device/qcom/sun/manifest_sun.xml
+        device/qcom/canoe/manifest_canoe.xml
 -->
 <manifest version="8.0" type="device" target-level="202404">
     <hal format="aidl">
         <name>android.hardware.gatekeeper</name>
         <fqname>IGatekeeper/default</fqname>
+    </hal>
+    <hal format="aidl">
+        <name>vendor.qti.hardware.dsp</name>
+        <fqname>IDspService/default</fqname>
     </hal>
     <sepolicy>
         <version>202404</version>
