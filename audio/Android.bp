@@ -1,0 +1,30 @@
+// Copyright (C) 2026 AERA Recovery Project contributors
+// SPDX-License-Identifier: Apache-2.0
+
+cc_binary {
+    name: "aera-audio-service",
+    recovery: true,
+    srcs: ["aera_agm_service.c"],
+    shared_libs: [
+        "libbinder_ndk",
+        "libdl",
+        "liblog",
+    ],
+    cflags: [
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+    ],
+}
+
+cc_binary {
+    name: "aera-audio-bridge",
+    recovery: true,
+    srcs: ["aera_audio_bridge.cpp"],
+    cpp_std: "c++17",
+    cflags: [
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+    ],
+}

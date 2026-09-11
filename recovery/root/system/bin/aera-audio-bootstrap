@@ -1,0 +1,199 @@
+#!/system/bin/sh
+# Copyright (C) 2026 AERA Recovery Project contributors
+# SPDX-License-Identifier: Apache-2.0
+#
+# Mount the installed Infiniti stock audio stack read-only and start the narrow
+# AGM service used by AERA. This script is deliberately device-local.
+
+PATH=/system/bin:/sbin
+export PATH
+stock_root=/mnt/aera-stock
+vendor_root=${stock_root}/vendor
+system_root=${stock_root}/system
+audio_abi=/vendor/aera-audio-abi
+lock=${stock_root}/.audio-lock
+slot_suffix="$(getprop ro.boot.slot_suffix)"
+
+fail() {
+    echo "AERA audio: $*" >&2
+    exit 1
+}
+
+case "$(getprop ro.product.device)" in
+    infiniti|PLK110|OP611FL1|OP60FFL1|CPH2745|CPH2747|CPH2749) ;;
+    *)
+        case "$(getprop ro.product.vendor.device)" in
+            infiniti|PLK110|OP611FL1|OP60FFL1|CPH2745|CPH2747|CPH2749) ;;
+            *) fail "this backend is only valid on Infiniti/OnePlus 15" ;;
+        esac
+        ;;
+esac
+
+mkdir -p "${stock_root}" "${vendor_root}" "${system_root}" /odm /firmware \
+    /vendor/firmware_mnt /vendor/dsp /vendor/etc/acdbdata \
+    /vendor/etc/audio "${audio_abi}" /vendor/etc/seccomp_policy
+lock_attempt=0
+while ! mkdir "${lock}" 2>/dev/null; do
+    [ "$(getprop init.svc.aera-agm-service)" = running ] && exit 0
+    lock_attempt=$((lock_attempt + 1))
+    [ "${lock_attempt}" -ge 300 ] && fail "another bootstrap did not finish"
+    sleep 0.1
+done
+trap 'rmdir "${lock}" 2>/dev/null' EXIT
+
+find_partition() {
+    part="$1"
+    for candidate in \
+        "/dev/block/mapper/${part}${slot_suffix}" \
+        "/dev/block/mapper/${part}_a" \
+        "/dev/block/mapper/${part}_b"; do
+        [ -b "${candidate}" ] && { echo "${candidate}"; return 0; }
+    done
+    return 1
+}
+
+mount_read_only() {
+    part="$1"
+    target="$2"
+    grep -q " ${target} " /proc/mounts && return 0
+    source=""
+    find_attempt=0
+    while [ -z "${source}" ] && [ "${find_attempt}" -lt 100 ]; do
+        source="$(find_partition "${part}")"
+        [ -n "${source}" ] && break
+        find_attempt=$((find_attempt + 1))
+        sleep 0.1
+    done
+    [ -n "${source}" ] || return 1
+    mount -t erofs -o ro "${source}" "${target}" 2>/dev/null || \
+        mount -t ext4 -o ro,noload "${source}" "${target}" 2>/dev/null
+}
+
+mount_read_only vendor "${vendor_root}" || fail "could not mount stock vendor"
+mount_read_only system "${system_root}" || fail "could not mount stock system"
+mount_read_only odm /odm || fail "could not mount stock odm"
+
+# The dedicated slot-matched DSP partition carries AudioPD modules. Android
+# mounts it before audioadsprpcd starts and exposes the legacy /dsp alias.
+# Keep this after FBE/decryption, alongside the rest of the stock audio mounts.
+if ! grep -q ' /vendor/dsp ' /proc/mounts; then
+    dsp="/dev/block/bootdevice/by-name/dsp${slot_suffix}"
+    [ -b "${dsp}" ] || dsp="/dev/block/by-name/dsp${slot_suffix}"
+    [ -b "${dsp}" ] || fail "the active DSP partition is missing"
+    mount -t ext4 -o ro,noload "${dsp}" /vendor/dsp || \
+        fail "could not mount the DSP module partition"
+fi
+[ -e /dsp ] || ln -s /vendor/dsp /dsp || \
+    fail "could not expose the stock /dsp path"
+
+# Qualcomm's audio processes are built against the framework Binder ABI from
+# the installed OP15 system. Recovery's Binder-NDK library is close enough to
+# load but is not compatible with the vendor-side Binder snapshot, causing
+# audioadsprpcd and dspservice to restart before AudioPD comes up. Expose only
+# the two ABI-matched Binder libraries rather than overlaying /system.
+system_lib64="${system_root}/system/lib64"
+[ -f "${system_lib64}/libbinder.so" ] || system_lib64="${system_root}/lib64"
+bind_file_read_only() {
+    source_file="$1"
+    target_file="$2"
+    [ -f "${source_file}" ] || fail "missing stock file ${source_file}"
+    [ -e "${target_file}" ] || touch "${target_file}" || \
+        fail "could not create bind target ${target_file}"
+    if ! grep -q " ${target_file} " /proc/mounts; then
+        mount -o bind "${source_file}" "${target_file}" || \
+            fail "could not bind ${source_file}"
+        mount -o remount,bind,ro "${target_file}" 2>/dev/null
+    fi
+}
+bind_file_read_only "${system_lib64}/libbinder.so" \
+    "${audio_abi}/libbinder.so"
+bind_file_read_only "${system_lib64}/libbinder_ndk.so" \
+    "${audio_abi}/libbinder_ndk.so"
+bind_file_read_only \
+    "${vendor_root}/etc/seccomp_policy/vendor.qti.hardware.dsp.policy" \
+    "/vendor/etc/seccomp_policy/vendor.qti.hardware.dsp.policy"
+
+# Keep AERA's vendor tree and GPU userspace visible. Qualcomm's matching
+# library directory is exposed under /vendor so the vendor linker namespace
+# accepts it, without overlaying /vendor or disturbing a running/restarted UI.
+if ! grep -q ' /vendor/aera-stock-lib64 ' /proc/mounts; then
+    mount -o bind "${vendor_root}/lib64" /vendor/aera-stock-lib64 || \
+        fail "could not expose the installed stock audio libraries"
+    mount -o remount,bind,ro /vendor/aera-stock-lib64 2>/dev/null
+fi
+
+# The modem partition owns the ADSP images and service-locator JSON files.
+# Recovery normally unmounts it after the PMIC bootstrap, so restore it for
+# the long-lived audio DSP and expose the path expected by Qualcomm userspace.
+if ! grep -q ' /firmware ' /proc/mounts; then
+    modem="/dev/block/bootdevice/by-name/modem${slot_suffix}"
+    [ -b "${modem}" ] || modem="/dev/block/by-name/modem${slot_suffix}"
+    [ -b "${modem}" ] || fail "the active modem firmware partition is missing"
+    mount -t vfat -o ro "${modem}" /firmware || \
+        fail "could not mount the ADSP firmware partition"
+fi
+if ! grep -q ' /vendor/firmware_mnt ' /proc/mounts; then
+    mount -o bind /firmware /vendor/firmware_mnt || \
+        fail "could not expose ADSP firmware to stock vendor"
+fi
+
+# AGM's proprietary libraries use these fixed Android paths. Bind only their
+# calibration database into the recovery vendor tree; never overlay /vendor.
+if [ -d "${vendor_root}/etc/acdbdata" ] && \
+   ! grep -q ' /vendor/etc/acdbdata ' /proc/mounts; then
+    mount -o bind "${vendor_root}/etc/acdbdata" /vendor/etc/acdbdata || \
+        fail "could not expose the stock calibration database"
+fi
+if [ -d "${vendor_root}/etc/audio" ] && \
+   ! grep -q ' /vendor/etc/audio ' /proc/mounts; then
+    mount -o bind "${vendor_root}/etc/audio" /vendor/etc/audio || \
+        fail "could not expose the stock audio service configuration"
+fi
+for config in card-defs.xml mem_logger_config.xml; do
+    source_config="${vendor_root}/etc/${config}"
+    target_config="/vendor/etc/${config}"
+    [ -f "${source_config}" ] && [ -f "${target_config}" ] && \
+        mount -o bind "${source_config}" "${target_config}" 2>/dev/null
+done
+
+mkdir -p /data/vendor/audio/acdbdata/delta /data/vendor/audio_dsp
+
+start_init_service() {
+    service="$1"
+    required="$2"
+    state="$(getprop "init.svc.${service}")"
+    [ "${state}" = running ] && return 0
+    setprop ctl.start "${service}"
+    attempt=0
+    while [ "$(getprop "init.svc.${service}")" != running ] && \
+          [ "${attempt}" -lt 50 ]; do
+        attempt=$((attempt + 1))
+        sleep 0.1
+    done
+    [ "$(getprop "init.svc.${service}")" = running ] && return 0
+    [ "${required}" = required ] && fail "init service ${service} did not start"
+    echo "AERA audio: optional service ${service} is unavailable" >&2
+    return 0
+}
+
+# These must precede the SPF/machine probe. In particular audioadsprpcd
+# creates Qualcomm's audiopd and its APM endpoint. Running it through init
+# also gives it the stock SELinux domain instead of recovery/su.
+start_init_service aera-pd-mapper required
+start_init_service aera-dspservice required
+start_init_service aera-audioadsprpcd required
+
+attempt=0
+# card 100 is tinyalsa's virtual AGM plugin id; the kernel machine card itself
+# is allocated a normal ALSA index (normally controlC0).
+while [ ! -e /dev/snd/controlC0 ] && [ "${attempt}" -lt 200 ]; do
+    attempt=$((attempt + 1))
+    sleep 0.1
+done
+[ -e /dev/snd/controlC0 ] || fail "the Qualcomm machine sound card did not register"
+
+# The init service owns the stock-library environment. Do not export it here:
+# recovery's toolbox/getprop/setprop require AERA's matching system libraries.
+start_init_service aera-agm-service required
+
+echo "AERA audio: Infiniti AGM backend is ready"
