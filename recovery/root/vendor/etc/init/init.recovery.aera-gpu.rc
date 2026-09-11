@@ -1,0 +1,5 @@
+on early-init
+    export LD_LIBRARY_PATH /vendor/lib64:/vendor/lib64/egl:/system/lib64
+
+on post-fs-data
+    mkdir /data/vendor/gpu 0770 root root
