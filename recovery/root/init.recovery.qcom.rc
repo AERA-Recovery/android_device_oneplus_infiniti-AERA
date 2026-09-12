@@ -75,6 +75,15 @@ service aera-audioadsprpcd /vendor/bin/aera-audioadsprpcd audiopd adsp
     group media
     setenv LD_LIBRARY_PATH /vendor/aera-audio-abi:/vendor/aera-stock-lib64:/vendor/lib64:/system/lib64
 
+service aera-oplus-charger /mnt/aera-stock/odm/bin/hw/vendor.oplus.hardware.charger-V10-service
+    class hal
+    disabled
+    seclabel u:r:recovery:s0
+    user system
+    group system
+    setenv LD_LIBRARY_PATH /vendor/aera-audio-abi:/vendor/aera-stock-lib64:/mnt/aera-stock/odm/lib64:/vendor/lib64:/system/lib64
+    interface aidl vendor.oplus.hardware.charger.ICharger/default
+
 service aera-agm-service /system/bin/aera-audio-service --infiniti-stock-agm
     class main
     disabled

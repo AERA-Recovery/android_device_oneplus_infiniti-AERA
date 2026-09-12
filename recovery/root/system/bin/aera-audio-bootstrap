@@ -2,14 +2,15 @@
 # Copyright (C) 2026 AERA Recovery Project contributors
 # SPDX-License-Identifier: Apache-2.0
 #
-# Mount the installed Infiniti stock audio stack read-only and start the narrow
-# AGM service used by AERA. This script is deliberately device-local.
+# Mount the installed Infiniti stock audio stack read-only and start the
+# services used by AERA's protected PAL playback path.
 
 PATH=/system/bin:/sbin
 export PATH
 stock_root=/mnt/aera-stock
 vendor_root=${stock_root}/vendor
 system_root=${stock_root}/system
+odm_root=${stock_root}/odm
 audio_abi=/vendor/aera-audio-abi
 lock=${stock_root}/.audio-lock
 slot_suffix="$(getprop ro.boot.slot_suffix)"
@@ -29,9 +30,14 @@ case "$(getprop ro.product.device)" in
         ;;
 esac
 
-mkdir -p "${stock_root}" "${vendor_root}" "${system_root}" /odm /firmware \
-    /vendor/firmware_mnt /vendor/dsp /vendor/etc/acdbdata \
-    /vendor/etc/audio "${audio_abi}" /vendor/etc/seccomp_policy
+mkdir -p "${stock_root}" "${vendor_root}" "${system_root}" "${odm_root}" \
+    /odm/firmware /odm/firmware/fastchg /firmware \
+    /vendor/firmware_mnt /vendor/dsp /vendor/lib/rfsa/adsp \
+    /vendor/etc/acdbdata \
+    /vendor/etc/audio \
+    "${audio_abi}" /vendor/etc/seccomp_policy /data/vendor/battery
+chmod 0755 "${stock_root}" /odm/firmware /vendor/lib /vendor/lib/rfsa
+chown 1000:1000 /data/vendor/battery
 lock_attempt=0
 while ! mkdir "${lock}" 2>/dev/null; do
     [ "$(getprop init.svc.aera-agm-service)" = running ] && exit 0
@@ -71,7 +77,7 @@ mount_read_only() {
 
 mount_read_only vendor "${vendor_root}" || fail "could not mount stock vendor"
 mount_read_only system "${system_root}" || fail "could not mount stock system"
-mount_read_only odm /odm || fail "could not mount stock odm"
+mount_read_only odm "${odm_root}" || fail "could not mount stock odm"
 
 # The dedicated slot-matched DSP partition carries AudioPD modules. Android
 # mounts it before audioadsprpcd starts and exposes the legacy /dsp alias.
@@ -109,6 +115,15 @@ bind_file_read_only "${system_lib64}/libbinder.so" \
     "${audio_abi}/libbinder.so"
 bind_file_read_only "${system_lib64}/libbinder_ndk.so" \
     "${audio_abi}/libbinder_ndk.so"
+# The TFA speaker codec requests its device-matched tuning container from ODM.
+bind_file_read_only "${odm_root}/firmware/tfa98xx.cnt" \
+    "/odm/firmware/tfa98xx.cnt"
+if [ -d "${odm_root}/firmware/fastchg" ] && \
+   ! grep -q ' /odm/firmware/fastchg ' /proc/mounts; then
+    mount -o bind "${odm_root}/firmware/fastchg" /odm/firmware/fastchg || \
+        fail "could not expose the stock charger configuration"
+    mount -o remount,bind,ro /odm/firmware/fastchg 2>/dev/null
+fi
 bind_file_read_only \
     "${vendor_root}/etc/seccomp_policy/vendor.qti.hardware.dsp.policy" \
     "/vendor/etc/seccomp_policy/vendor.qti.hardware.dsp.policy"
@@ -137,8 +152,18 @@ if ! grep -q ' /vendor/firmware_mnt ' /proc/mounts; then
         fail "could not expose ADSP firmware to stock vendor"
 fi
 
-# AGM's proprietary libraries use these fixed Android paths. Bind only their
-# calibration database into the recovery vendor tree; never overlay /vendor.
+# AGM prefers the device-specific ODM calibration database. Recovery already
+# owns /odm as a rootfs directory, so expose only the required stock subtree.
+[ -d "${odm_root}/etc/acdbdata" ] || \
+    fail "missing stock ODM audio calibration database"
+mkdir -p /odm/etc/acdbdata
+if ! grep -q ' /odm/etc/acdbdata ' /proc/mounts; then
+    mount -o bind "${odm_root}/etc/acdbdata" /odm/etc/acdbdata || \
+        fail "could not expose the stock ODM audio calibration database"
+    mount -o remount,bind,ro /odm/etc/acdbdata 2>/dev/null
+fi
+
+# Keep the vendor calibration files available for codecs which use them.
 if [ -d "${vendor_root}/etc/acdbdata" ] && \
    ! grep -q ' /vendor/etc/acdbdata ' /proc/mounts; then
     mount -o bind "${vendor_root}/etc/acdbdata" /vendor/etc/acdbdata || \
@@ -148,6 +173,26 @@ if [ -d "${vendor_root}/etc/audio" ] && \
    ! grep -q ' /vendor/etc/audio ' /proc/mounts; then
     mount -o bind "${vendor_root}/etc/audio" /vendor/etc/audio || \
         fail "could not expose the stock audio service configuration"
+fi
+
+# Infiniti's ODM files add the TFA route and Oplus speaker protection to the
+# generic Canoe PAL configuration. Recovery does not publish the vendor SKU,
+# so PAL selects the files exposed directly under /vendor/etc.
+for config in mixer_paths resourcemanager; do
+    bind_file_read_only "${odm_root}/etc/${config}.xml" \
+        "/vendor/etc/${config}_canoe_mtp.xml"
+done
+bind_file_read_only "${odm_root}/etc/usecaseKvManager.xml" \
+    "/vendor/etc/usecaseKvManager.xml"
+bind_file_read_only "${vendor_root}/etc/audio/sku_canoe/plugin_manager.xml" \
+    "/vendor/etc/plugin_manager.xml"
+
+# Oplus speaker processing is loaded into AudioPD on demand. These device-only
+# DSP modules live in ODM, while adsprpc searches the legacy vendor RFSA path.
+if ! grep -q ' /vendor/lib/rfsa/adsp ' /proc/mounts; then
+    mount -o bind "${odm_root}/lib/rfsa/adsp" /vendor/lib/rfsa/adsp || \
+        fail "could not expose the stock ODM AudioPD modules"
+    mount -o remount,bind,ro /vendor/lib/rfsa/adsp 2>/dev/null
 fi
 for config in card-defs.xml mem_logger_config.xml; do
     source_config="${vendor_root}/etc/${config}"
@@ -176,12 +221,41 @@ start_init_service() {
     return 0
 }
 
+start_adsp() {
+    adsp_remoteproc=""
+    for candidate in /sys/class/remoteproc/remoteproc*; do
+        [ -r "${candidate}/name" ] || continue
+        case "$(cat "${candidate}/name")" in
+            *remoteproc-adsp)
+                adsp_remoteproc="${candidate}"
+                break
+                ;;
+        esac
+    done
+    [ -n "${adsp_remoteproc}" ] || fail "could not find the ADSP remoteproc"
+
+    if [ "$(cat "${adsp_remoteproc}/state" 2>/dev/null)" != running ]; then
+        echo start > "${adsp_remoteproc}/state" || fail "could not boot the ADSP"
+    fi
+
+    attempt=0
+    while [ "$(cat "${adsp_remoteproc}/state" 2>/dev/null)" != running ] && \
+          [ "${attempt}" -lt 100 ]; do
+        attempt=$((attempt + 1))
+        sleep 0.1
+    done
+    [ "$(cat "${adsp_remoteproc}/state" 2>/dev/null)" = running ] || \
+        fail "the ADSP did not enter the running state"
+}
+
 # These must precede the SPF/machine probe. In particular audioadsprpcd
 # creates Qualcomm's audiopd and its APM endpoint. Running it through init
 # also gives it the stock SELinux domain instead of recovery/su.
+start_init_service aera-oplus-charger required
 start_init_service aera-pd-mapper required
 start_init_service aera-dspservice required
 start_init_service aera-audioadsprpcd required
+start_adsp
 
 attempt=0
 # card 100 is tinyalsa's virtual AGM plugin id; the kernel machine card itself

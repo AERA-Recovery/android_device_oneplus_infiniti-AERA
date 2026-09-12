@@ -231,6 +231,8 @@ subsystem mem_buf_vm
 /dev/fastrpc-adsp-secure  0644   system     system
 /dev/fastrpc-cdsp-secure  0644   system     system
 /dev/fastrpc-sdsp-secure  0644   system     system
+/dev/fastrpc-nsp*         0644   system     system
+/dev/fastrpc-lpass*       0644   system     system
 /dev/system_health_monitor 0644  radio      system
 /dev/mdss_rotator         0664   system     system
 /dev/spec_sync            0660   system     system

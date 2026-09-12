@@ -21,6 +21,7 @@ cc_binary {
     name: "aera-audio-bridge",
     recovery: true,
     srcs: ["aera_audio_bridge.cpp"],
+    shared_libs: ["libdl"],
     cpp_std: "c++17",
     cflags: [
         "-Wall",
