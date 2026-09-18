@@ -177,6 +177,9 @@ on property:post.decrypt.modules=true
 on property:ro.crypto.state=encrypted && property:ro.boot.dynamic_partitions=true
     start prepdecrypt.vendor
 
+on property:crypto.ready=1
+    start vendor.keymint-qti
+
 on property:hwservicemanager.ready=true
     setprop sys.boot_completed 1
 
