@@ -1,8 +1,8 @@
 on property:post.decrypt.modules=true
-    setprop sys.fox.wlan.up 0
+    setprop sys.aera.wlan.up 0
     chmod 222 /sys/bus/platform/drivers/cnss2/b0000000.qcom,cnss-peach/fs_ready
     write /sys/bus/platform/drivers/cnss2/b0000000.qcom,cnss-peach/fs_ready 1
-    start fox-wlan-ready
+    start aera-wlan-ready
 
 on property:wifi.driver.ready=true
     mkdir /tmp/recovery 0777 root root
@@ -13,7 +13,7 @@ service wpa_supplicant /system/bin/wpa_supplicant -Dnl80211 -iwlan0 -dd -O/tmp/r
     disabled
     seclabel u:r:recovery:s0
 
-service fox-wlan-ready /system/bin/sh -c "until test -e /sys/class/net/wlan0; do sleep 1; done; setprop wifi.driver.ready true"
+service aera-wlan-ready /system/bin/sh -c "until test -e /sys/class/net/wlan0; do sleep 1; done; setprop wifi.driver.ready true"
     disabled
     oneshot
     user root

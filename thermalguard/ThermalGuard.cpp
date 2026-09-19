@@ -63,7 +63,7 @@ void HandleSignal(int) {
 void Log(const std::string& message) {
     std::ofstream kmsg("/dev/kmsg");
     if (kmsg)
-        kmsg << "[fox-thermal-guard] " << message << '\n';
+        kmsg << "[aera-thermal-guard] " << message << '\n';
 }
 
 bool ReadInt(const std::string& path, int64_t* value) {
@@ -231,10 +231,10 @@ void ApplyState(std::vector<CpuPolicy>* policies, State state,
             policy.last_written = 0;
     }
 
-    android::base::SetProperty("fox.thermal.status", StateName(state));
-    android::base::SetProperty("fox.thermal.temp", std::to_string(reading.temperature));
-    android::base::SetProperty("fox.thermal.sensor", reading.sensor);
-    android::base::SetProperty("fox.thermal.cap_pct", std::to_string(percent));
+    android::base::SetProperty("aera.thermal.status", StateName(state));
+    android::base::SetProperty("aera.thermal.temp", std::to_string(reading.temperature));
+    android::base::SetProperty("aera.thermal.sensor", reading.sensor);
+    android::base::SetProperty("aera.thermal.cap_pct", std::to_string(percent));
     Log(std::string("state=") + StateName(state) + " sensor=" + reading.sensor +
         " temp=" + std::to_string(reading.temperature / 1000) + "C cpu_cap=" +
         std::to_string(percent) + "%");
@@ -250,8 +250,8 @@ void Restore(std::vector<CpuPolicy>* policies) {
         }
         policy.last_written = 0;
     }
-    android::base::SetProperty("fox.thermal.status", "stopped");
-    android::base::SetProperty("fox.thermal.cap_pct", "100");
+    android::base::SetProperty("aera.thermal.status", "stopped");
+    android::base::SetProperty("aera.thermal.cap_pct", "100");
     Log("restored daemon-owned CPU limits");
 }
 
@@ -338,8 +338,8 @@ int main() {
     int64_t peak_temperature = 0;
     std::string peak_sensor;
 
-    android::base::SetProperty("fox.thermal.status", "normal");
-    android::base::SetProperty("fox.thermal.cap_pct", "100");
+    android::base::SetProperty("aera.thermal.status", "normal");
+    android::base::SetProperty("aera.thermal.cap_pct", "100");
     Log("started with " + std::to_string(policies.size()) + " CPU policies and " +
         std::to_string(sensors.size()) + " thermal sensors");
 
@@ -350,14 +350,14 @@ int main() {
             break;
         }
 
-        android::base::SetProperty("fox.thermal.temp", std::to_string(reading.temperature));
-        android::base::SetProperty("fox.thermal.sensor", reading.sensor);
+        android::base::SetProperty("aera.thermal.temp", std::to_string(reading.temperature));
+        android::base::SetProperty("aera.thermal.sensor", reading.sensor);
         if (reading.temperature > peak_temperature) {
             peak_temperature = reading.temperature;
             peak_sensor = reading.sensor;
-            android::base::SetProperty("fox.thermal.peak_temp",
+            android::base::SetProperty("aera.thermal.peak_temp",
                                        std::to_string(peak_temperature));
-            android::base::SetProperty("fox.thermal.peak_sensor", peak_sensor);
+            android::base::SetProperty("aera.thermal.peak_sensor", peak_sensor);
         }
 
         const State next = UpdateState(state, reading.temperature, &warm_samples,

@@ -112,51 +112,51 @@ TARGET_USERIMAGES_USE_F2FS := true
 # Crypto
 BOARD_USES_METADATA_PARTITION := true
 BOARD_USES_QCOM_FBE_DECRYPTION := true
-TW_INCLUDE_CRYPTO := true
-TW_INCLUDE_CRYPTO_FBE := true
-TW_INCLUDE_FBE_METADATA_DECRYPT := true
-TW_USE_FSCRYPT_POLICY := 2
+AERA_INCLUDE_CRYPTO := true
+AERA_INCLUDE_CRYPTO_FBE := true
+AERA_INCLUDE_FBE_METADATA_DECRYPT := true
+AERA_USE_FSCRYPT_POLICY := 2
 
 # Recovery
 BOARD_EXCLUDE_KERNEL_FROM_RECOVERY_IMAGE := true
 TARGET_RECOVERY_PIXEL_FORMAT := RGBX_8888
-TW_INCLUDE_FASTBOOTD := true
-TW_SKIP_ADDITIONAL_FSTAB := true
+AERA_INCLUDE_FASTBOOTD := true
+AERA_SKIP_ADDITIONAL_FSTAB := true
 AERA_UI2_ADAPTIVE_RESOLUTION := true
 
 # Tool
-TW_INCLUDE_LIBRESETPROP := true
-TW_INCLUDE_LPDUMP := true
-TW_INCLUDE_LPTOOLS := true
-TW_INCLUDE_REPACKTOOLS := true
-TW_INCLUDE_RESETPROP := true
+AERA_INCLUDE_LIBRESETPROP := true
+AERA_INCLUDE_LPDUMP := true
+AERA_INCLUDE_LPTOOLS := true
+AERA_INCLUDE_REPACKTOOLS := true
+AERA_INCLUDE_RESETPROP := true
 
 # Debug
 TARGET_USES_LOGD := true
-TWRP_INCLUDE_LOGCAT := true
+AERA_INCLUDE_LOGCAT := true
 TARGET_RECOVERY_DEVICE_MODULES += debuggerd
 TARGET_RECOVERY_DEVICE_MODULES += strace
 RECOVERY_BINARY_SOURCE_FILES += $(TARGET_OUT_EXECUTABLES)/debuggerd
 RECOVERY_BINARY_SOURCE_FILES += $(TARGET_OUT_EXECUTABLES)/strace
 
-# TWRP display
-TW_BRIGHTNESS_PATH := "/sys/class/backlight/panel0-backlight/brightness"
-TW_DEFAULT_BRIGHTNESS := 2047
-TW_FRAMERATE := 120
-TW_MAX_BRIGHTNESS := 4094
-TW_NO_SCREEN_BLANK := true
-TW_SCREEN_BLANK_ON_BOOT := true
-TW_THEME := portrait_hdpi
+# AERA display
+AERA_BRIGHTNESS_PATH := "/sys/class/backlight/panel0-backlight/brightness"
+AERA_DEFAULT_BRIGHTNESS := 2047
+AERA_FRAMERATE := 120
+AERA_MAX_BRIGHTNESS := 4094
+AERA_NO_SCREEN_BLANK := true
+AERA_SCREEN_BLANK_ON_BOOT := true
+AERA_THEME := portrait_hdpi
 TARGET_USES_VULKAN := true
 
-# TWRP file system
+# AERA file system
 RECOVERY_SDCARD_ON_DATA := true
 TARGET_USES_MKE2FS := true
-TW_ENABLE_FS_COMPRESSION := true
-TW_INCLUDE_FUSE_EXFAT := true
-TW_INCLUDE_FUSE_NTFS := true
-TW_INCLUDE_NTFS_3G := true
-TW_NO_EXFAT_FUSE := true
+AERA_ENABLE_FS_COMPRESSION := true
+AERA_INCLUDE_FUSE_EXFAT := true
+AERA_INCLUDE_FUSE_NTFS := true
+AERA_INCLUDE_NTFS_3G := true
+AERA_NO_EXFAT_FUSE := true
 
 # Version
 PLATFORM_VERSION := 99.87.36
@@ -164,24 +164,24 @@ PLATFORM_VERSION_LAST_STABLE := $(PLATFORM_VERSION)
 PLATFORM_SECURITY_PATCH := 2099-12-31
 VENDOR_SECURITY_PATCH := $(PLATFORM_SECURITY_PATCH)
 BOOT_SECURITY_PATCH := $(PLATFORM_SECURITY_PATCH)
-TW_DEVICE_VERSION := OnePlus_15
+AERA_DEVICE_VERSION := OnePlus_15
 
 # Vibrator
-TW_SUPPORT_INPUT_AIDL_HAPTICS := true
+AERA_SUPPORT_INPUT_AIDL_HAPTICS := true
 
-# Other TWRP Configurations
+# Other AERA configurations
 TARGET_RECOVERY_QCOM_RTC_FIX := true
-TW_CUSTOM_CPU_TEMP_PATH := "/sys/class/thermal/thermal_zone45/temp" # CPU-0-0-0
-TW_EXCLUDE_APEX := true
-TW_EXCLUDE_DEFAULT_USB_INIT := true
+AERA_CUSTOM_CPU_TEMP_PATH := "/sys/class/thermal/thermal_zone45/temp" # CPU-0-0-0
+AERA_EXCLUDE_APEX := true
+AERA_EXCLUDE_DEFAULT_USB_INIT := true
 AERA_DEFAULT_LANGUAGE := en
 AERA_EXTRA_LANGUAGES := true
-TW_LOAD_VENDOR_MODULES := "oplus_bsp_synaptics_tcm2.ko oplus_bsp_tp_common.ko oplus_bsp_tp_custom.ko oplus_bsp_tp_focal_common.ko oplus_bsp_tp_ft3518.ko oplus_bsp_tp_ft3658u_spi.ko oplus_bsp_tp_ft3681.ko oplus_bsp_tp_ft3683g.ko oplus_bsp_tp_ft8057p.ko oplus_bsp_tp_goodix_comnon.ko oplus_bsp_tp_gt9916.ko oplus_bsp_tp_gt9966.ko oplus_bsp_tp_ilitek7807s.ko oplus_bsp_tp_ilitek_common.ko oplus_bsp_tp_notify.ko oplus_bsp_tp_novatek_common.ko oplus_bsp_tp_nt36528_noflash.ko oplus_bsp_tp_nt36532_noflash.ko oplus_bsp_tp_nt36672c_noflash.ko oplus_bsp_tp_syna_common.ko oplus_bsp_tp_tcm_S3908.ko oplus_bsp_tp_tcm_S3910.ko oplus_bsp_tp_td4377_noflash.ko q6_notifier_dlkm.ko spf_core_dlkm.ko audpkt_ion_dlkm.ko gpr_dlkm.ko audio_pkt_dlkm.ko q6_dlkm.ko adsp_loader_dlkm.ko audio_prm_dlkm.ko q6_pdr_dlkm.ko pinctrl_lpi_dlkm.ko swr_dlkm.ko swr_ctrl_dlkm.ko snd_event_dlkm.ko wcd_core_dlkm.ko mbhc_dlkm.ko sdca_registers_dlkm.ko wcd9xxx_dlkm.ko stub_dlkm.ko swr_dmic_dlkm.ko swr_haptics_dlkm.ko hdmi_dlkm.ko lpass_cdc_wsa2_macro_dlkm.ko lpass_cdc_wsa_macro_dlkm.ko lpass_cdc_va_macro_dlkm.ko lpass_cdc_rx_macro_dlkm.ko lpass_cdc_tx_macro_dlkm.ko lpass_cdc_dlkm.ko wsa884x_dlkm.ko wsa883x_dlkm.ko wcd938x_dlkm.ko wcd938x_slave_dlkm.ko wcd939x_dlkm.ko wcd939x_slave_dlkm.ko wcd9378_dlkm.ko wcd9378_slave_dlkm.ko lpass_bt_swr_dlkm.ko machine_dlkm.ko oplus_audio_extend.ko oplus_audio_tfa98xx_v6.ko oplus_audio_daemon.ko oplus_audio_netlink.ko frpc-adsprpc.ko oplus_chg_v2.ko stm_st54se_gpio.ko nxp-nci.ko msm_kgsl.ko"
-TW_POST_DECRYPT_MODULES := "smem-mailbox.ko cnss_prealloc.ko cnss_utils.ko cnss_plat_ipc_qmi_svc.ko cnss_nl.ko wlan_firmware_service.ko cnss2.ko rfkill.ko btpower.ko btfmcodec.ko bt_fm_swr.ko cfg80211.ko gsim.ko rmnet_mem.ko ipam.ko qca_cld3_peach_v2.ko"
-TW_LOAD_VENDOR_MODULES_EXCLUDE_GKI := true
-TW_USE_SERIALNO_PROPERTY_FOR_DEVICE_ID := true
-TW_USE_TOOLBOX := true
-TW_INPUT_BLACKLIST := "hbtp_vm"
+AERA_LOAD_VENDOR_MODULES := "oplus_bsp_synaptics_tcm2.ko oplus_bsp_tp_common.ko oplus_bsp_tp_custom.ko oplus_bsp_tp_focal_common.ko oplus_bsp_tp_ft3518.ko oplus_bsp_tp_ft3658u_spi.ko oplus_bsp_tp_ft3681.ko oplus_bsp_tp_ft3683g.ko oplus_bsp_tp_ft8057p.ko oplus_bsp_tp_goodix_comnon.ko oplus_bsp_tp_gt9916.ko oplus_bsp_tp_gt9966.ko oplus_bsp_tp_ilitek7807s.ko oplus_bsp_tp_ilitek_common.ko oplus_bsp_tp_notify.ko oplus_bsp_tp_novatek_common.ko oplus_bsp_tp_nt36528_noflash.ko oplus_bsp_tp_nt36532_noflash.ko oplus_bsp_tp_nt36672c_noflash.ko oplus_bsp_tp_syna_common.ko oplus_bsp_tp_tcm_S3908.ko oplus_bsp_tp_tcm_S3910.ko oplus_bsp_tp_td4377_noflash.ko q6_notifier_dlkm.ko spf_core_dlkm.ko audpkt_ion_dlkm.ko gpr_dlkm.ko audio_pkt_dlkm.ko q6_dlkm.ko adsp_loader_dlkm.ko audio_prm_dlkm.ko q6_pdr_dlkm.ko pinctrl_lpi_dlkm.ko swr_dlkm.ko swr_ctrl_dlkm.ko snd_event_dlkm.ko wcd_core_dlkm.ko mbhc_dlkm.ko sdca_registers_dlkm.ko wcd9xxx_dlkm.ko stub_dlkm.ko swr_dmic_dlkm.ko swr_haptics_dlkm.ko hdmi_dlkm.ko lpass_cdc_wsa2_macro_dlkm.ko lpass_cdc_wsa_macro_dlkm.ko lpass_cdc_va_macro_dlkm.ko lpass_cdc_rx_macro_dlkm.ko lpass_cdc_tx_macro_dlkm.ko lpass_cdc_dlkm.ko wsa884x_dlkm.ko wsa883x_dlkm.ko wcd938x_dlkm.ko wcd938x_slave_dlkm.ko wcd939x_dlkm.ko wcd939x_slave_dlkm.ko wcd9378_dlkm.ko wcd9378_slave_dlkm.ko lpass_bt_swr_dlkm.ko machine_dlkm.ko oplus_audio_extend.ko oplus_audio_tfa98xx_v6.ko oplus_audio_daemon.ko oplus_audio_netlink.ko frpc-adsprpc.ko oplus_chg_v2.ko stm_st54se_gpio.ko nxp-nci.ko msm_kgsl.ko"
+AERA_POST_DECRYPT_MODULES := "smem-mailbox.ko cnss_prealloc.ko cnss_utils.ko cnss_plat_ipc_qmi_svc.ko cnss_nl.ko wlan_firmware_service.ko cnss2.ko rfkill.ko btpower.ko btfmcodec.ko bt_fm_swr.ko cfg80211.ko gsim.ko rmnet_mem.ko ipam.ko qca_cld3_peach_v2.ko"
+AERA_LOAD_VENDOR_MODULES_EXCLUDE_GKI := true
+AERA_USE_SERIALNO_PROPERTY_FOR_DEVICE_ID := true
+AERA_USE_TOOLBOX := true
+AERA_INPUT_BLACKLIST := "hbtp_vm"
 
 # se_omapi
-TW_INCLUDE_OMAPI := true
+AERA_INCLUDE_OMAPI := true

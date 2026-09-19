@@ -22,12 +22,12 @@ check_setpatch_override()
 	fi
 }
 #
-# Default TWRP values for PLATFORM_VERSION and PLATFORM_SECURITY_PATCH
+# Default recovery values for PLATFORM_VERSION and PLATFORM_SECURITY_PATCH
 #
 # ro.build.version.release and ro.build.version.security_patch will get
 # set to the below values respectively if these props are blank when
 # the script runs. These values should be updated to reflect the
-# TWRP defaults in your device's BoardConfig.mk
+# Recovery defaults in the device BoardConfig.mk
 osver_twrp="99.87.36"
 patchlevel_twrp="2099-12-31"
 
@@ -266,7 +266,7 @@ sdkver=$(getprop ro.build.version.sdk)
 patchlevel=$(getprop ro.build.version.security_patch)
 patchlevel_orig=$(getprop ro.build.version.security_patch_orig)
 
-log_print 2 "Running $SCRIPTNAME script for TWRP..."
+log_print 2 "Running $SCRIPTNAME for AERA..."
 check_encrypt
 
 log_print 2 "SDK version: $sdkver"

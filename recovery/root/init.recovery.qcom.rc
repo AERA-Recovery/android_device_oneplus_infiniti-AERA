@@ -104,7 +104,7 @@ service aera-audio-bootstrap /system/bin/aera-audio-bootstrap
     user root
     group root system audio media wakelock
 
-service fox-thermal-guard /system/bin/fox_thermal_guard
+service aera-thermal-guard /system/bin/aera_thermal_guard
     class core
     user root
     group root
@@ -113,12 +113,12 @@ service fox-thermal-guard /system/bin/fox_thermal_guard
 
 # Keep thermal monitoring outside the decryption critical path.
 on property:twrp.decrypt.done=true
-    start fox-thermal-guard
+    start aera-thermal-guard
 
 on property:ro.crypto.state=unencrypted
-    start fox-thermal-guard
+    start aera-thermal-guard
 
-# The eSE drivers are loaded by TW_LOAD_VENDOR_MODULES, and the Secure Element
+# The eSE drivers are loaded by AERA_LOAD_VENDOR_MODULES, and the Secure Element
 # HAL uses the NFC HAL to power the chip. Start each dependency in order.
 service vendor.crypto-hal-delay /system/bin/sh -c "if grep -q '^/dev/block/.* /odm ' /proc/mounts; then umount -l /odm; fi; if grep -q '^/dev/block/.* /vendor ' /proc/mounts; then umount -l /vendor; fi; setprop vendor.crypto_hal.start_nfc 1; sleep 1; setprop vendor.crypto_hal.start_se 1; sleep 1; setprop vendor.crypto_hal.start_clients 1; sleep 1; setprop vendor.crypto_hal.ready 1"
     user root

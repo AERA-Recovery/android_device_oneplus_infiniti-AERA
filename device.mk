@@ -26,7 +26,7 @@ PRODUCT_PACKAGES += \
     lpflash \
     lpmake \
     lpunpack \
-    fox_thermal_guard
+    aera_thermal_guard
 
 # Infiniti/OnePlus 15 Adreno 840 backend. The ABI-matched KGSL module,
 # gen80200 firmware, EGL/GLES userspace, and mapper closure remain local to
@@ -43,5 +43,5 @@ PRODUCT_EXTRA_RECOVERY_KEYS += \
 PRODUCT_SOONG_NAMESPACES += $(LOCAL_PATH)
 
 # Recovery-specific settings
-$(call inherit-product, $(LOCAL_PATH)/fox_infiniti.mk)
+$(call inherit-product, $(LOCAL_PATH)/aera_infiniti.mk)
 #
