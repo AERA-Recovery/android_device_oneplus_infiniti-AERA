@@ -1,4 +1,8 @@
+on property:twrp.decrypt.done=true
+    start aera-infiniti-wlan-mac
+
 on property:post.decrypt.modules=true
+    start aera-infiniti-wlan-mac
     setprop sys.aera.wlan.up 0
     chmod 222 /sys/bus/platform/drivers/cnss2/b0000000.qcom,cnss-peach/fs_ready
     write /sys/bus/platform/drivers/cnss2/b0000000.qcom,cnss-peach/fs_ready 1
@@ -18,6 +22,16 @@ on property:sys.aera.wlan.up=1 && property:wifi.driver.ready=true
 service wpa_supplicant /system/bin/wpa_supplicant -Dnl80211 -iwlan0 -dd -O/tmp/recovery/sockets -c/vendor/etc/wifi/wpa_supplicant.conf
     disabled
     seclabel u:r:recovery:s0
+
+# Serve the recovery MAC locally instead of waiting for the offline modem DMS.
+service aera-infiniti-wlan-mac /system/bin/aera-infiniti-wlan-mac
+    class core
+    disabled
+    oneshot
+    user root
+    group root
+    seclabel u:r:recovery:s0
+    stdio_to_kmsg
 
 service aera-wlan-ready /system/bin/sh -c "until test -e /sys/class/net/wlan0; do sleep 1; done; setprop wifi.driver.ready true"
     disabled
