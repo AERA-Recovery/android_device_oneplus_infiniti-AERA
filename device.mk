@@ -23,7 +23,6 @@ PRODUCT_PACKAGES += \
     aera-audio-service \
     aera-browser-jail \
     aera-gpu-probe \
-    aera-infiniti-wlan-mac \
     lpflash \
     lpmake \
     lpunpack \
