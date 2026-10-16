@@ -197,8 +197,9 @@ fi
 for config in card-defs.xml mem_logger_config.xml; do
     source_config="${vendor_root}/etc/${config}"
     target_config="/vendor/etc/${config}"
-    [ -f "${source_config}" ] && [ -f "${target_config}" ] && \
-        mount -o bind "${source_config}" "${target_config}" 2>/dev/null
+    if [ -f "${source_config}" ] && [ -f "${target_config}" ]; then
+        bind_file_read_only "${source_config}" "${target_config}"
+    fi
 done
 
 mkdir -p /data/vendor/audio/acdbdata/delta /data/vendor/audio_dsp
