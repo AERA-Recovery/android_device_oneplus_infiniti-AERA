@@ -1,7 +1,7 @@
-on property:twrp.decrypt.done=true
+on init
     start aera-infiniti-wlan-mac
 
-on property:post.decrypt.modules=true
+on property:twrp.modules.loaded=true
     start aera-infiniti-wlan-mac
     setprop sys.aera.wlan.up 0
     chmod 222 /sys/bus/platform/drivers/cnss2/b0000000.qcom,cnss-peach/fs_ready

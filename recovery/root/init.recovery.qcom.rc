@@ -156,19 +156,20 @@ on property:ro.boot.usbcontroller=*
 on fs
     wait /dev/block/platform/soc/${ro.boot.bootdevice}
     symlink /dev/block/platform/soc/${ro.boot.bootdevice} /dev/block/bootdevice
+    # Early WLAN/IPA probes need their modem-partition firmware before the
+    # recovery module loader runs, not only after twrp.modules.loaded.
+    mkdir /firmware 0755 root root
+    mount vfat /dev/block/bootdevice/by-name/modem${ro.boot.slot_suffix} /firmware ro
     write /proc/sys/kernel/firmware_config/force_sysfs_fallback 1
 
 on property:twrp.modules.loaded=true
     start vendor.crypto-hal-delay
-    # Mount firmware
-    mkdir /firmware
-    mount vfat /dev/block/bootdevice/by-name/modem${ro.boot.slot_suffix} /firmware ro
     # Load ADSP firmware for PMIC
     wait /sys/kernel/boot_adsp/ssr
     write /sys/kernel/boot_adsp/ssr 1
     wait /sys/class/power_supply/battery
     start vendor.health-default
-    umount /firmware
+    # Keep firmware available for asynchronous WLAN, IPA and ADSP requests.
 
 # Keep stock audio partition mounts away from the FBE critical path.
 on property:post.decrypt.modules=true
