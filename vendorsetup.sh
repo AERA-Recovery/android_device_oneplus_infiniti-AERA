@@ -64,6 +64,7 @@ if [ "$1" = "$FDEVICE" -o "$AERA_BUILD_DEVICE" = "$FDEVICE" ]; then
 	export AERA_TARGET_DEVICES="$TARGET_DEVICE_ALT"
 	export AERA_USE_DMSETUP=1
 	export AERA_ENABLE_ROOT_MANAGER=1
+	export AERA_ENABLE_MOBILE_DATA=1
 	# AERA begins at R1.0; do not append a legacy maintainer patch suffix.
 	unset AERA_MAINTAINER_PATCH_VERSION
 fi

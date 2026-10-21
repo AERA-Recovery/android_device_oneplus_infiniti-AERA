@@ -1,0 +1,38 @@
+package {
+    default_applicable_licenses: ["Android-Apache-2.0"],
+}
+
+cc_binary {
+    name: "aera-cellular-provider",
+    recovery: true,
+    srcs: ["daemon.cpp"],
+    include_dirs: ["bootable/recovery"],
+    cpp_std: "c++17",
+    rtti: false,
+    cppflags: ["-fexceptions"],
+    cflags: ["-Wall", "-Wextra", "-Werror"],
+    static_libs: ["libjsoncpp"],
+    shared_libs: ["libcutils"],
+    required: ["aera-mobile-rmtfs", "aera-mobile-tftp"],
+}
+
+cc_binary {
+    name: "aera-mobile-rmtfs",
+    recovery: true,
+    stl: "none",
+    srcs: [":aera_rmtfs_sources", "sharedmem-uio.c", "readonly-guard.c"],
+    static_libs: ["libaera_qrtr"],
+    header_libs: ["aera_rmtfs_headers"],
+    cflags: ["-D_GNU_SOURCE", "-Wno-unused-parameter"],
+    ldflags: ["-Wl,--wrap=open,--wrap=openat,--wrap=pwrite,--wrap=storage_init"],
+}
+
+cc_binary {
+    name: "aera-mobile-tftp",
+    recovery: true,
+    stl: "none",
+    srcs: [":aera_tqftpserv_sources", "translate-safe.c"],
+    static_libs: ["libaera_qrtr"],
+    header_libs: ["aera_tqftpserv_headers"],
+    cflags: ["-D_GNU_SOURCE", "-Wno-unused-parameter"],
+}

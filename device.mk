@@ -18,6 +18,10 @@ PRODUCT_TARGET_VNDK_VERSION := 34
 # Dynamic partitions
 PRODUCT_USE_DYNAMIC_PARTITIONS := true
 
+ifeq ($(AERA_ENABLE_MOBILE_DATA),1)
+PRODUCT_PACKAGES += aera-cellular-provider
+endif
+
 PRODUCT_PACKAGES += \
     aera-audio-bridge \
     aera-audio-service \
