@@ -1,6 +1,8 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 #include "aera_mobile/client.hpp"
 #include "qmi.hpp"
+#include "sim.hpp"
+#include <openssl/sha.h>
 #include <arpa/inet.h>
 #include <dirent.h>
 #include <linux/if_link.h>
@@ -33,6 +35,19 @@ std::mutex state_mutex, completion_mutex;
 std::condition_variable completion;
 Json::Value status(Json::objectValue);
 std::string helper_directory="/system/bin";
+std::string pending_pin,pending_pin_request;
+uint64_t pin_request_sequence=0;
+void ClearPin(std::string &pin) {
+  volatile char *data=pin.data();for(size_t i=0;i<pin.size();++i)data[i]=0;
+  pin.clear();
+}
+std::string SimIdentity(const Bytes &iccid) {
+  unsigned char digest[SHA256_DIGEST_LENGTH];
+  SHA256(iccid.data(),iccid.size(),digest);
+  const char *hex="0123456789abcdef";std::string out;
+  for(unsigned char c:digest){out+=hex[c>>4];out+=hex[c&15];}
+  return out;
+}
 
 std::string Read(const std::string &path,size_t maximum=16384) {
   Fd fd(open(path.c_str(),O_RDONLY|O_CLOEXEC));
@@ -71,6 +86,13 @@ void Phase(const std::string &state,const std::string &message) {
   std::lock_guard<std::mutex> lock(state_mutex);
   status["state"]=state;status["message"]=message;SaveLocked();
   fprintf(stderr,"mobile: %s: %s\n",state.c_str(),message.c_str());
+}
+void ClearConnectionLocked() {
+  status["connected"]=false;status["registered"]=false;status["signal_valid"]=false;
+  status["bars"]=-1;status["signal_dbm"]=0;
+  for(const char *key:{"address","gateway","interface","operator","technology","dns1","dns2","effective_apn"})
+    status[key]="";
+  status.removeMember("mtu");
 }
 void CheckCancelled() { if(cancel.load())throw std::runtime_error("Connection cancelled"); }
 void Delay(unsigned milliseconds) {
@@ -214,6 +236,94 @@ struct Session {
   std::mutex network_mutex;
   std::string network_error;
   uint32_t handle=0;
+  std::map<unsigned,std::string> SimIdentities(QmiClient &uim) {
+    std::map<unsigned,std::string> out;
+    for(const auto &entry:ParseSimIdentifiers(Field(uim.Call(0x47,{},5,&cancel),0x10)))
+      out[entry.first]=SimIdentity(entry.second);
+    return out;
+  }
+  void WaitForSim(const Endpoint &endpoint,int subscription) {
+    QmiClient uim(endpoint);
+    std::map<unsigned,std::string> identities;
+    try {
+      identities=SimIdentities(uim);
+    }catch(const std::exception &){CheckCancelled();}
+    unsigned initializing=0,polls=0;
+    const std::string request=std::to_string(getpid())+"-"+std::to_string(++pin_request_sequence);
+    while(true) {
+      CheckCancelled();CheckHelpers();
+      if(++polls%10==0) {
+        try{identities=SimIdentities(uim);}catch(const std::exception &){CheckCancelled();}
+      }
+      const auto cards=ParseSimCards(Field(uim.Call(0x2f,{},5,&cancel),0x10));
+      const uint16_t index=subscription==2?cards.secondary:cards.primary;
+      const SimCard *selected=nullptr;
+      Json::Value sims(Json::arrayValue);
+      for(const auto &card:cards.cards) {
+        Json::Value sim;sim["slot"]=card.slot;sim["id"]=identities[card.slot];
+        sim["state"]=SimState(card);sim["retries"]=card.retries;sims.append(sim);
+        if(card.slot==unsigned((index>>8)+1)&&card.application==unsigned(index&255))selected=&card;
+      }
+      if(!selected) {
+        {
+          std::lock_guard<std::mutex> lock(state_mutex);status["sims"]=sims;
+          status["sim_state"]="initializing";status["state"]="initializing";
+          status["message"]="Preparing SIM";SaveLocked();
+        }
+        if(++initializing>60)throw std::runtime_error("The selected data SIM has no provisioning application");
+        Delay(500);continue;
+      }
+      if(selected->slot>2)throw std::runtime_error("Unsupported SIM slot");
+      const auto state=SimState(*selected);
+      const std::string identity=identities[selected->slot];
+      {
+        std::lock_guard<std::mutex> lock(state_mutex);
+        status["sims"]=sims;status["sim_slot"]=selected->slot;status["sim_id"]=identity;
+        status["pin_retries"]=selected->retries;status["pin_request"]=request;
+        status["sim_state"]=state;
+        if(state!="ready") {
+          status["state"]=pending_pin.empty()?state:"verifying_pin";status["message"]=state=="pin_required"?"SIM PIN required":
+            state=="puk_required"?"SIM requires PUK. Unlock it in Android":
+            state=="blocked"?"SIM is blocked":state=="absent"?"Selected SIM is not present":"Preparing SIM";
+        }
+        SaveLocked();
+      }
+      if(state=="ready")return;
+      if(state=="absent")throw std::runtime_error("Selected SIM is not present");
+      if(state=="initializing"&&++initializing>60)throw std::runtime_error("SIM initialization timed out");
+      std::string pin;
+      {
+        std::lock_guard<std::mutex> lock(state_mutex);
+        if(pending_pin_request==request)pin.swap(pending_pin);
+        pending_pin_request.clear();
+      }
+      if(!pin.empty()) {
+        if(state!="pin_required") {ClearPin(pin);continue;}
+        Bytes payload,info{static_cast<uint8_t>(selected->universal?3:1),static_cast<uint8_t>(pin.size())};
+        info.insert(info.end(),pin.begin(),pin.end());ClearPin(pin);
+        Tlv(payload,1,{static_cast<uint8_t>(selected->slot==1?6:7),0});Tlv(payload,2,info);
+        std::fill(info.begin(),info.end(),0);
+        Phase("verifying_pin","Verifying SIM PIN");
+        std::string outcome="success";
+        try {
+          if(!identity.empty()&&SimIdentities(uim)[selected->slot]!=identity)
+            throw std::runtime_error("SIM changed before PIN verification");
+          uim.Call(0x26,payload,10,&cancel);
+        }
+        catch(const QmiError &){outcome="failed";}
+        catch(const std::exception &){outcome="unknown";}
+        std::fill(payload.begin(),payload.end(),0);
+        {
+          std::lock_guard<std::mutex> lock(state_mutex);
+          status["pin_result"]["request"]=request;status["pin_result"]["id"]=identity;
+          status["pin_result"]["outcome"]=outcome;SaveLocked();
+        }
+        // Even on a transport timeout, only query status; never resend a PIN.
+        CheckCancelled();
+      }
+      Delay(500);
+    }
+  }
   ~Session(){try{Stop();}catch(const std::exception &e){fprintf(stderr,"mobile cleanup: %s\n",e.what());}}
 
   pid_t Spawn(const std::string &name,const std::vector<std::string> &arguments) {
@@ -412,6 +522,13 @@ struct Session {
       Bytes nas_binding;Tlv(nas_binding,1,{static_cast<uint8_t>(subscription-1)});
       nas->Call(0x45,nas_binding,6,&cancel);
     }
+    int selected_subscription=subscription;
+    if(!selected_subscription) {
+      const auto bound=wds->Call(0xb0,{},6,&cancel);const auto &value=Field(bound,0x10);
+      if(value.size()==4)selected_subscription=static_cast<int>(U32(value.data()));
+    }
+    WaitForSim(Find(endpoints,11,nase.node),selected_subscription);
+    Phase("registering","Waiting for mobile network registration");
     bool attached=false;
     for(int attempt=0;attempt<60&&!attached;++attempt) {
       CheckHelpers();
@@ -539,14 +656,14 @@ void Worker(std::string apn,int subscription) {
       while(Read(session.modem+"/state")!="offline")std::this_thread::sleep_for(std::chrono::seconds(1));
       session.Stop();
     }
-    {std::lock_guard<std::mutex> lock(state_mutex);status["connected"]=false;status["address"]="";
-      status["registered"]=false;status["signal_valid"]=false;status["bars"]=-1;status["technology"]="";}
+    {std::lock_guard<std::mutex> lock(state_mutex);ClearConnectionLocked();}
     if(cancel.load()||!was_connected)break;
     Phase("waiting","Mobile connection lost. Retrying in "+std::to_string(retry_seconds)+" seconds");
     try{Delay(retry_seconds*1000);}catch(const std::exception &){break;}
     retry_seconds=std::min(60u,retry_seconds*2);
   }
   {std::lock_guard<std::mutex> lock(state_mutex);status["enabled"]=false;status["connected"]=false;
+    ClearPin(pending_pin);pending_pin_request.clear();status["pin_request"]="";
     status["registered"]=false;status["signal_valid"]=false;status["bars"]=-1;status["technology"]="";status["address"]="";}
   if(cancel.load())failure.clear();
   Phase(failure.empty()?"off":"error",failure.empty()?"Mobile data is off":failure);
@@ -602,6 +719,25 @@ int Main(int argc,char **argv) {
     std::string command(buffer,count),reply="ERROR";
     if(command=="disconnect")reply=Disconnect()?"OK":"Modem is still stopping. Reboot before flashing";
     else if(command=="disconnect-async"){cancel.store(true);reply="OK";}
+    else if(command.rfind("verify-pin ",0)==0) {
+      Json::CharReaderBuilder reader;Json::Value config;std::string error;
+      std::istringstream input(command.substr(11));
+      if(Json::parseFromStream(reader,input,&config,&error)&&config.isObject()&&
+          config["pin"].isString()&&config["request"].isString()&&config["id"].isString()) {
+        std::string pin=config["pin"].asString();
+        std::lock_guard<std::mutex> lock(state_mutex);
+        if(working.load()&&!cancel.load()&&status["state"]=="pin_required"&&pending_pin.empty()&&
+            status["pin_request"]==config["request"]&&status["sim_id"]==config["id"]&&
+            ValidPin(pin)&&status.get("pin_retries",0).asUInt()>0) {
+          pending_pin.swap(pin);pending_pin_request=config["request"].asString();
+          status["pin_attempt"]=status.get("pin_attempt",0).asUInt()+1;
+          status["state"]="verifying_pin";status["message"]="Verifying SIM PIN";
+          status.removeMember("pin_result");SaveLocked();reply="OK";
+        }else reply="SIM state changed. Check the selected SIM and try again";
+        ClearPin(pin);
+      }
+      ClearPin(command);memset(buffer,0,sizeof(buffer));
+    }
     else if(command.rfind("connect ",0)==0&&!working.load()) {
       Json::CharReaderBuilder reader;Json::Value config;std::string error;
       std::istringstream input(command.substr(8));
@@ -612,7 +748,10 @@ int Main(int argc,char **argv) {
         for(unsigned char c:apn)valid&=(c>='a'&&c<='z')||(c>='A'&&c<='Z')||(c>='0'&&c<='9')||c=='.'||c=='-'||c=='_';
         if(valid) {
           if(worker.joinable())worker.join();cancel.store(false);working.store(true);
-          {std::lock_guard<std::mutex> lock(state_mutex);status["enabled"]=true;status["subscription"]=subscription;status["apn"]=apn;SaveLocked();}
+          {std::lock_guard<std::mutex> lock(state_mutex);ClearConnectionLocked();status["enabled"]=true;status["subscription"]=subscription;status["apn"]=apn;
+            ClearPin(pending_pin);pending_pin_request.clear();status["pin_request"]="";
+            status["sim_state"]="";status["sim_slot"]=0;status["sim_id"]="";status["pin_attempt"]=0;
+            status.removeMember("pin_result");status["sims"]=Json::Value(Json::arrayValue);SaveLocked();}
           worker=std::thread(Worker,apn,subscription);reply="OK";
         }else reply="Invalid APN or SIM selection";
       }

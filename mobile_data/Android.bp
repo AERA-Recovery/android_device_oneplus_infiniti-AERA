@@ -12,7 +12,7 @@ cc_binary {
     cppflags: ["-fexceptions"],
     cflags: ["-Wall", "-Wextra", "-Werror"],
     static_libs: ["libjsoncpp"],
-    shared_libs: ["libcutils"],
+    shared_libs: ["libcutils", "libcrypto"],
     required: ["aera-mobile-rmtfs", "aera-mobile-tftp"],
 }
 
