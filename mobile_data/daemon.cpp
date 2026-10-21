@@ -2,6 +2,7 @@
 #include "aera_mobile/client.hpp"
 #include "qmi.hpp"
 #include "sim.hpp"
+#include "modem_features.hpp"
 #include <openssl/sha.h>
 #include <arpa/inet.h>
 #include <dirent.h>
@@ -485,6 +486,7 @@ struct Session {
     if(Read(modem+"/state")!="offline")throw std::runtime_error("The modem is already running outside AERA mobile data; reboot recovery first");
     Phase("starting","Preparing the modem");
     Module("rmnet_ctl");Module("ipanetm");Module("rmnet_core");
+    LoadModemFeatures();
     PrepareFirmware();CheckCancelled();
     rmtfs=Spawn("aera-mobile-rmtfs",{"-r","-P","-o","/dev/block/bootdevice/by-name"});
     tftp=Spawn("aera-mobile-tftp",{"-d"});

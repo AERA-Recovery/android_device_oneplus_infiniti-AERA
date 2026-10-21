@@ -31,8 +31,8 @@ struct QrtrAddress { uint16_t family=42, pad=0; uint32_t node=0, port=0; };
 
 class QmiError : public std::runtime_error {
  public:
-  QmiError(uint16_t code,uint16_t request):std::runtime_error("QMI error "+
-      std::to_string(code)+" (request "+std::to_string(request)+")"),code(code){}
+  QmiError(uint16_t code,uint16_t request,const std::string &detail={}):std::runtime_error("QMI error "+
+      std::to_string(code)+" (request "+std::to_string(request)+")"+detail),code(code){}
   const uint16_t code;
 };
 
@@ -118,7 +118,14 @@ class QmiClient {
       }
       const auto &result=Field(values,2);
       if(result.size()!=4)throw std::runtime_error("Missing QMI operation result");
-      if(U16(result.data()))throw QmiError(U16(&result[2]),message);
+      if(U16(result.data())) {
+        std::string detail=" [service "+std::to_string(endpoint_.service)+"]";
+        const auto &reason=Field(values,0x11);
+        if(endpoint_.service==1&&message==0x20&&reason.size()==4)
+          detail+=" [call reason "+std::to_string(U16(reason.data()))+"/"+
+              std::to_string(U16(reason.data()+2))+"]";
+        throw QmiError(U16(&result[2]),message,detail);
+      }
       return values;
     }
   }
