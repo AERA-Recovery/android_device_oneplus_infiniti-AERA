@@ -58,10 +58,24 @@ find_partition() {
     return 1
 }
 
+is_mounted() {
+    awk -v target="$1" '$5 == target { found = 1 } END { exit !found }' \
+        /proc/self/mountinfo
+}
+
+private_mount() {
+    # Toybox looks up a single-argument mount in fstab even for propagation
+    # changes. The kernel ignores this explicit source for MS_PRIVATE.
+    mount -o private none "$1" || fail "could not isolate audio mount $1"
+}
+
 mount_read_only() {
     part="$1"
     target="$2"
-    grep -q " ${target} " /proc/mounts && return 0
+    if is_mounted "${target}"; then
+        private_mount "${target}"
+        return 0
+    fi
     source=""
     find_attempt=0
     while [ -z "${source}" ] && [ "${find_attempt}" -lt 100 ]; do
@@ -72,7 +86,11 @@ mount_read_only() {
     done
     [ -n "${source}" ] || return 1
     mount -t erofs -o ro "${source}" "${target}" 2>/dev/null || \
-        mount -t ext4 -o ro,noload "${source}" "${target}" 2>/dev/null
+        mount -t ext4 -o ro,noload "${source}" "${target}" 2>/dev/null || return 1
+    # Bind clones inherit the source's propagation group. Private sources
+    # prevent later file overlays from propagating back into stock mounts or
+    # into other aliases, which would create stacks on every audio retry.
+    private_mount "${target}"
 }
 
 mount_read_only vendor "${vendor_root}" || fail "could not mount stock vendor"
@@ -89,6 +107,7 @@ if ! grep -q ' /vendor/dsp ' /proc/mounts; then
     mount -t ext4 -o ro,noload "${dsp}" /vendor/dsp || \
         fail "could not mount the DSP module partition"
 fi
+private_mount /vendor/dsp
 [ -e /dsp ] || ln -s /vendor/dsp /dsp || \
     fail "could not expose the stock /dsp path"
 
@@ -105,11 +124,12 @@ bind_file_read_only() {
     [ -f "${source_file}" ] || fail "missing stock file ${source_file}"
     [ -e "${target_file}" ] || touch "${target_file}" || \
         fail "could not create bind target ${target_file}"
-    if ! grep -q " ${target_file} " /proc/mounts; then
+    if ! is_mounted "${target_file}"; then
         mount -o bind "${source_file}" "${target_file}" || \
             fail "could not bind ${source_file}"
         mount -o remount,bind,ro "${target_file}" 2>/dev/null
     fi
+    private_mount "${target_file}"
 }
 bind_file_read_only "${system_lib64}/libbinder.so" \
     "${audio_abi}/libbinder.so"
@@ -148,6 +168,7 @@ if ! grep -q ' /firmware ' /proc/mounts; then
         fail "could not mount the ADSP firmware partition"
 fi
 if ! grep -q ' /vendor/firmware_mnt ' /proc/mounts; then
+    private_mount /firmware
     mount -o bind /firmware /vendor/firmware_mnt || \
         fail "could not expose ADSP firmware to stock vendor"
 fi
@@ -200,6 +221,14 @@ for config in card-defs.xml mem_logger_config.xml; do
     if [ -f "${source_config}" ] && [ -f "${target_config}" ]; then
         bind_file_read_only "${source_config}" "${target_config}"
     fi
+done
+
+# Retried bootstrap runs and flash-service restarts must reuse one mount at
+# each destination. Keep existing directory aliases private as well.
+for target in /firmware /vendor/firmware_mnt /vendor/aera-stock-lib64 \
+    /odm/firmware/fastchg /odm/etc/acdbdata /vendor/etc/acdbdata \
+    /vendor/etc/audio /vendor/lib/rfsa/adsp; do
+    is_mounted "${target}" && private_mount "${target}"
 done
 
 mkdir -p /data/vendor/audio/acdbdata/delta /data/vendor/audio_dsp
