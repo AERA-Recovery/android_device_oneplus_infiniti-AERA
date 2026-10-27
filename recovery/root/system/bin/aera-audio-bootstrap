@@ -281,6 +281,18 @@ start_adsp() {
 # These must precede the SPF/machine probe. In particular audioadsprpcd
 # creates Qualcomm's audiopd and its APM endpoint. Running it through init
 # also gives it the stock SELinux domain instead of recovery/su.
+charger_service=""
+for charger_version in 12 11 10; do
+    candidate="${odm_root}/bin/hw/vendor.oplus.hardware.charger-V${charger_version}-service"
+    if [ -x "${candidate}" ]; then
+        charger_service="${candidate}"
+        break
+    fi
+done
+[ -n "${charger_service}" ] || fail "installed firmware has no supported charger HAL (V10/V11/V12)"
+ln -sf "${charger_service}" /vendor/bin/aera-oplus-charger || \
+    fail "could not select the installed charger HAL"
+echo "AERA audio: using charger HAL V${charger_version}"
 start_init_service aera-oplus-charger required
 start_init_service aera-pd-mapper required
 start_init_service aera-dspservice required

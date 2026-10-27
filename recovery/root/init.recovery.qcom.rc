@@ -75,7 +75,9 @@ service aera-audioadsprpcd /vendor/bin/aera-audioadsprpcd audiopd adsp
     group media
     setenv LD_LIBRARY_PATH /vendor/aera-audio-abi:/vendor/aera-stock-lib64:/vendor/lib64:/system/lib64
 
-service aera-oplus-charger /mnt/aera-stock/odm/bin/hw/vendor.oplus.hardware.charger-V10-service
+# Bootstrap points this alias at the charger HAL from the installed firmware.
+# Keep the init identity/environment unchanged across V10, V11 and V12 firmware.
+service aera-oplus-charger /vendor/bin/aera-oplus-charger
     class hal
     disabled
     seclabel u:r:recovery:s0
